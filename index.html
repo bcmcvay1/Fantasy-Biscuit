@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Fantasy Biscuit</title>
+<meta name="description" content="Fantasy Biscuit — home of the biscuit.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;700&family=Inter:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --cream: #FBF1DE;
+    --cream-deep: #F3E4C4;
+    --biscuit: #DFA25D;
+    --biscuit-dark: #B97A3E;
+    --biscuit-shadow: #8A5A2C;
+    --choc: #6B3A22;
+    --ink: #5C3A1E;
+    --gold: #E7B04E;
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body {
+    margin: 0;
+    min-height: 100%;
+  }
+
+  body {
+    background: radial-gradient(ellipse at 50% 30%, var(--cream-deep), var(--cream) 70%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    gap: 2rem;
+    font-family: 'Inter', sans-serif;
+    padding: 3rem 1.5rem;
+  }
+
+  .stage {
+    position: relative;
+    width: min(70vw, 60vh, 480px);
+    aspect-ratio: 1 / 1;
+  }
+
+  .biscuit-btn {
+    all: unset;
+    display: block;
+    width: 100%;
+    height: 100%;
+    cursor: pointer;
+    transition: transform .15s ease;
+  }
+  .biscuit-btn:hover { transform: scale(1.03); }
+  .biscuit-btn:active { transform: scale(0.98); }
+  .biscuit-btn:focus-visible .biscuit-svg {
+    outline: 3px solid var(--biscuit-shadow);
+    outline-offset: 6px;
+    border-radius: 50%;
+  }
+
+  .biscuit-svg {
+    width: 100%;
+    height: 100%;
+    display: block;
+    animation: settle 1.1s cubic-bezier(.2,.9,.25,1) both;
+  }
+
+  @keyframes settle {
+    from { transform: translateY(14px) scale(.94); opacity: 0; }
+    to   { transform: translateY(0) scale(1); opacity: 1; }
+  }
+
+  .steam {
+    position: absolute;
+    top: -6%;
+    left: 50%;
+    width: 60%;
+    height: 34%;
+    transform: translateX(-50%);
+    opacity: 0.55;
+    animation: rise 3.2s ease-in-out infinite;
+  }
+
+  @keyframes rise {
+    0%   { opacity: 0; transform: translate(-50%, 6px); }
+    30%  { opacity: 0.55; }
+    100% { opacity: 0; transform: translate(-50%, -14px); }
+  }
+
+  h1 {
+    margin: 0;
+    font-family: 'Baloo 2', sans-serif;
+    font-weight: 700;
+    font-size: clamp(1.6rem, 4vw, 2.4rem);
+    color: var(--ink);
+    letter-spacing: .01em;
+  }
+
+  .scores {
+    width: min(88vw, 480px);
+    max-height: 0;
+    overflow: hidden;
+    opacity: 0;
+    transition: max-height .35s ease, opacity .3s ease, margin .35s ease;
+  }
+  .scores.open {
+    max-height: 60vh;
+    opacity: 1;
+    overflow-y: auto;
+  }
+
+  .scores-card {
+    background: #FFFDF7;
+    border: 1px solid var(--cream-deep);
+    border-radius: 14px;
+    padding: 1.1rem 1.3rem;
+    box-shadow: 0 6px 20px rgba(92, 58, 30, 0.1);
+  }
+
+  .scores-card h2 {
+    margin: 0 0 .7rem;
+    font-family: 'Baloo 2', sans-serif;
+    font-size: 1.05rem;
+    color: var(--ink);
+  }
+
+  .game-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: .5rem 0;
+    border-top: 1px solid var(--cream-deep);
+    font-size: .92rem;
+    color: var(--ink);
+  }
+  .game-row:first-of-type { border-top: none; }
+
+  .game-row .status {
+    color: var(--biscuit-dark);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+
+  .scores-note {
+    font-size: .85rem;
+    color: var(--biscuit-shadow);
+    margin: 0;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .biscuit-svg, .steam { animation: none; }
+  }
+</style>
+</head>
+<body>
+
+  <div class="stage">
+    <button class="biscuit-btn" id="biscuitBtn" aria-expanded="false" aria-controls="scores" aria-label="Show yesterday's MLB box scores">
+    <svg class="steam" viewBox="0 0 120 100" xmlns="http://www.w3.org/2000/svg">
+      <path d="M35 90 C 20 70, 50 60, 35 40 C 22 22, 45 10, 40 0"
+            stroke="#FFFFFF" stroke-width="5" stroke-linecap="round" fill="none"/>
+      <path d="M75 90 C 60 72, 88 58, 74 38 C 62 20, 84 10, 80 0"
+            stroke="#FFFFFF" stroke-width="5" stroke-linecap="round" fill="none"/>
+    </svg>
+
+    <svg class="biscuit-svg" viewBox="0 0 400 400" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <radialGradient id="biscuitTop" cx="40%" cy="28%" r="80%">
+          <stop offset="0%" stop-color="#F0C077"/>
+          <stop offset="50%" stop-color="var(--biscuit)"/>
+          <stop offset="100%" stop-color="var(--biscuit-dark)"/>
+        </radialGradient>
+        <linearGradient id="biscuitSide" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="var(--biscuit-dark)"/>
+          <stop offset="100%" stop-color="#F4E3BE"/>
+        </linearGradient>
+        <linearGradient id="butterGrad" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#FCEB9E"/>
+          <stop offset="100%" stop-color="#F3D25E"/>
+        </linearGradient>
+        <filter id="softShadow" x="-30%" y="-30%" width="160%" height="160%">
+          <feDropShadow dx="0" dy="10" stdDeviation="12" flood-color="#5C3A1E" flood-opacity="0.25"/>
+        </filter>
+      </defs>
+
+      <g filter="url(#softShadow)">
+        <!-- pale doughy underside / side wall, slightly wider than the top -->
+        <path d="M78 232
+                 C 78 288, 130 328, 200 328
+                 C 270 328, 322 288, 322 232
+                 L 322 210
+                 C 322 210, 270 236, 200 236
+                 C 130 236, 78 210, 78 210 Z"
+              fill="url(#biscuitSide)" stroke="var(--biscuit-shadow)" stroke-width="3"/>
+
+        <!-- golden domed top, irregular hand-cut edge -->
+        <path d="M200 84
+                 C 254 82, 292 104, 308 140
+                 C 322 172, 316 200, 296 218
+                 C 268 240, 234 232, 200 234
+                 C 166 232, 132 240, 104 218
+                 C 84 200, 78 172, 92 140
+                 C 108 104, 146 86, 200 84 Z"
+              fill="url(#biscuitTop)" stroke="var(--biscuit-shadow)" stroke-width="4"/>
+
+        <!-- crackled/flaky texture lines on top -->
+        <g stroke="var(--biscuit-shadow)" stroke-width="2.5" stroke-linecap="round" fill="none" opacity="0.4">
+          <path d="M140 130 C 150 150, 148 172, 132 190"/>
+          <path d="M200 108 C 202 140, 196 168, 202 200"/>
+          <path d="M258 128 C 250 150, 254 174, 268 194"/>
+          <path d="M172 116 C 176 134, 168 150, 176 166"/>
+          <path d="M232 116 C 228 136, 236 150, 226 168"/>
+        </g>
+
+        <!-- toasted flecks -->
+        <g fill="var(--biscuit-dark)" opacity="0.5">
+          <circle cx="150" cy="150" r="2.6"/>
+          <circle cx="248" cy="146" r="2.2"/>
+          <circle cx="200" cy="180" r="2.4"/>
+          <circle cx="176" cy="200" r="2"/>
+          <circle cx="226" cy="198" r="2.2"/>
+        </g>
+
+        <!-- pat of melting butter on top -->
+        <path d="M172 138
+                 C 172 128, 184 122, 200 122
+                 C 216 122, 230 128, 230 140
+                 C 232 156, 226 168, 214 176
+                 C 226 182, 226 192, 210 194
+                 C 190 196, 168 190, 166 174
+                 C 164 160, 166 148, 172 138 Z"
+              fill="url(#butterGrad)" stroke="#D9A73B" stroke-width="2"/>
+        <path d="M178 142 C 182 138, 190 136, 196 138" stroke="#FFF7D6" stroke-width="2.5" stroke-linecap="round" fill="none"/>
+      </g>
+    </svg>
+    </button>
+  </div>
+
+  <h1>Fantasy Biscuit</h1>
+
+  <div class="scores" id="scores">
+    <div class="scores-card">
+      <h2 id="scoresHeading">Yesterday in baseball</h2>
+      <div id="scoresBody">
+        <p class="scores-note">Loading box scores…</p>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const btn = document.getElementById('biscuitBtn');
+    const panel = document.getElementById('scores');
+    const heading = document.getElementById('scoresHeading');
+    const body = document.getElementById('scoresBody');
+    let loaded = false;
+
+    function yesterdayISO() {
+      const d = new Date();
+      d.setDate(d.getDate() - 1);
+      return d.toISOString().slice(0, 10);
+    }
+
+    function formatDateLabel(iso) {
+      const [y, m, d] = iso.split('-').map(Number);
+      return new Date(y, m - 1, d).toLocaleDateString(undefined, {
+        weekday: 'long', month: 'long', day: 'numeric'
+      });
+    }
+
+    async function loadScores() {
+      const dateISO = yesterdayISO();
+      heading.textContent = `MLB box scores — ${formatDateLabel(dateISO)}`;
+      try {
+        const res = await fetch(
+          `https://statsapi.mlb.com/api/v1/schedule?sportId=1&date=${dateISO}&hydrate=linescore`
+        );
+        if (!res.ok) throw new Error('Request failed');
+        const data = await res.json();
+        const games = (data.dates && data.dates[0] && data.dates[0].games) || [];
+
+        if (games.length === 0) {
+          body.innerHTML = '<p class="scores-note">No MLB games were played that day.</p>';
+          return;
+        }
+
+        body.innerHTML = games.map(g => {
+          const away = g.teams.away, home = g.teams.home;
+          const played = g.status && g.status.abstractGameState === 'Final';
+          const line = played
+            ? `${away.score}–${home.score}`
+            : (g.status ? g.status.detailedState : '');
+          return `<div class="game-row">
+            <span>${away.team.name} @ ${home.team.name}</span>
+            <span class="status">${line}</span>
+          </div>`;
+        }).join('');
+      } catch (err) {
+        body.innerHTML = '<p class="scores-note">Couldn\'t load box scores right now — try again in a bit.</p>';
+      }
+    }
+
+    btn.addEventListener('click', () => {
+      const isOpen = panel.classList.toggle('open');
+      btn.setAttribute('aria-expanded', String(isOpen));
+      if (isOpen && !loaded) {
+        loaded = true;
+        loadScores();
+      }
+    });
+  </script>
+
+</body>
+</html>
