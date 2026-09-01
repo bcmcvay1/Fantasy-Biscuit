@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>About Us — Fantasy Biscuit</title>
+<meta name="description" content="About Fantasy Biscuit.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;700&family=Inter:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --cream: #FBF1DE;
+    --cream-deep: #F3E4C4;
+    --biscuit: #DFA25D;
+    --biscuit-dark: #B97A3E;
+    --biscuit-shadow: #8A5A2C;
+    --ink: #5C3A1E;
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body { margin: 0; min-height: 100%; }
+
+  body {
+    display: flex;
+    align-items: stretch;
+    min-height: 100vh;
+    font-family: 'Inter', sans-serif;
+  }
+
+  /* ---- Sidebar navigation ---- */
+  .sidebar {
+    width: 220px;
+    flex-shrink: 0;
+    background: var(--cream-deep);
+    border-right: 1px solid rgba(138, 90, 44, 0.15);
+    padding: 2rem 1.4rem;
+    display: flex;
+    flex-direction: column;
+    gap: 2rem;
+  }
+
+  .brand {
+    font-family: 'Baloo 2', sans-serif;
+    font-weight: 700;
+    font-size: 1.15rem;
+    color: var(--ink);
+    text-decoration: none;
+    line-height: 1.2;
+  }
+
+  .nav-links {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: .35rem;
+  }
+
+  .nav-links a {
+    display: block;
+    padding: .6rem .8rem;
+    border-radius: 10px;
+    font-family: 'Baloo 2', sans-serif;
+    font-weight: 500;
+    font-size: .98rem;
+    color: var(--ink);
+    text-decoration: none;
+    transition: background .15s ease;
+  }
+  .nav-links a:hover { background: rgba(138, 90, 44, 0.1); }
+  .nav-links a[aria-current="page"] {
+    background: var(--biscuit);
+    color: #FFFDF7;
+  }
+
+  .hamburger {
+    display: none;
+    position: fixed;
+    top: 1rem;
+    left: 1rem;
+    z-index: 20;
+    width: 42px;
+    height: 42px;
+    border: none;
+    border-radius: 10px;
+    background: var(--cream-deep);
+    box-shadow: 0 2px 8px rgba(92, 58, 30, 0.15);
+    cursor: pointer;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .hamburger span {
+    display: block;
+    width: 20px;
+    height: 2px;
+    background: var(--ink);
+    border-radius: 1px;
+  }
+
+  .sidebar-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.3);
+    z-index: 15;
+  }
+
+  @media (max-width: 768px) {
+    .hamburger { display: flex; }
+    .sidebar {
+      position: fixed;
+      top: 0;
+      left: 0;
+      height: 100vh;
+      transform: translateX(-100%);
+      transition: transform .25s ease;
+      z-index: 18;
+      box-shadow: 4px 0 16px rgba(0,0,0,0.15);
+    }
+    body.nav-open .sidebar { transform: translateX(0); }
+    body.nav-open .sidebar-overlay { display: block; }
+  }
+
+  /* ---- Main content ---- */
+  .main {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 3rem 1.5rem;
+    min-height: 100vh;
+    background: radial-gradient(ellipse at 50% 30%, var(--cream-deep), var(--cream) 70%);
+  }
+
+  .about-card {
+    max-width: 560px;
+    background: #FFFDF7;
+    border: 1px solid var(--cream-deep);
+    border-radius: 18px;
+    padding: 2.4rem 2.2rem;
+    box-shadow: 0 8px 24px rgba(92, 58, 30, 0.12);
+  }
+
+  .about-card h1 {
+    margin: 0 0 .3rem;
+    font-family: 'Baloo 2', sans-serif;
+    font-weight: 700;
+    font-size: clamp(1.8rem, 4vw, 2.3rem);
+    color: var(--ink);
+  }
+
+  .about-card .tagline {
+    margin: 0 0 1.4rem;
+    font-family: 'Baloo 2', sans-serif;
+    font-size: 1rem;
+    color: var(--biscuit-dark);
+  }
+
+  .about-card p {
+    margin: 0 0 1.1rem;
+    font-size: 1rem;
+    line-height: 1.65;
+    color: var(--ink);
+  }
+  .about-card p:last-of-type { margin-bottom: 0; }
+</style>
+</head>
+<body>
+
+  <button class="hamburger" id="navToggle" aria-label="Toggle menu" aria-expanded="false" aria-controls="siteNav">
+    <span></span><span></span><span></span>
+  </button>
+  <div class="sidebar-overlay" id="navOverlay"></div>
+
+  <nav class="sidebar" id="siteNav">
+    <a class="brand" href="index.html">Fantasy Biscuit</a>
+    <ul class="nav-links">
+      <li><a href="index.html">Home</a></li>
+      <li><a href="about.html" aria-current="page">About Us</a></li>
+    </ul>
+  </nav>
+
+  <main class="main">
+    <article class="about-card">
+      <h1>About Fantasy Biscuit</h1>
+      <p class="tagline">One biscuit. Zero distractions.</p>
+      <p>Fantasy Biscuit started as a simple question: what if a website had exactly one job? No product lineup, no newsletter pop-up — just a biscuit, golden and proud, sitting quietly on the page.</p>
+      <p>It turns out a biscuit can do a little more than sit there. Click it, and it'll fetch yesterday's MLB box scores for you — because a good biscuit understands that people have places to be and box scores to check.</p>
+      <p>We don't sell anything here. We don't track much of anything either. Fantasy Biscuit is just a small, well-made corner of the internet, built with the same care as a good biscuit: simple ingredients, done properly.</p>
+    </article>
+  </main>
+
+  <script>
+    const navToggle = document.getElementById('navToggle');
+    const navOverlay = document.getElementById('navOverlay');
+    function closeNav() {
+      document.body.classList.remove('nav-open');
+      navToggle.setAttribute('aria-expanded', 'false');
+    }
+    navToggle.addEventListener('click', () => {
+      const isOpen = document.body.classList.toggle('nav-open');
+      navToggle.setAttribute('aria-expanded', String(isOpen));
+    });
+    navOverlay.addEventListener('click', closeNav);
+  </script>
+
+</body>
+</html>
