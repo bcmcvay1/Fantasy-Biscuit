@@ -241,6 +241,34 @@
     color: var(--ink);
   }
 
+  .date-row {
+    display: flex;
+    align-items: center;
+    gap: .6rem;
+    margin-bottom: .9rem;
+  }
+
+  .date-row label {
+    font-family: 'Baloo 2', sans-serif;
+    font-size: .9rem;
+    color: var(--biscuit-shadow);
+  }
+
+  .date-row input[type="date"] {
+    font-family: 'Inter', sans-serif;
+    font-size: .92rem;
+    color: var(--ink);
+    background: var(--cream);
+    border: 1px solid var(--cream-deep);
+    border-radius: 8px;
+    padding: .4rem .6rem;
+    cursor: pointer;
+  }
+  .date-row input[type="date"]:focus-visible {
+    outline: 2px solid var(--biscuit-shadow);
+    outline-offset: 2px;
+  }
+
   .game-row {
     display: flex;
     justify-content: space-between;
@@ -299,7 +327,11 @@
 
   <div class="scores" id="scores">
     <div class="scores-card">
-      <h2 id="scoresHeading">Yesterday in baseball</h2>
+      <h2 id="scoresHeading">Box scores</h2>
+      <div class="date-row">
+        <label for="scoreDate">Date</label>
+        <input type="date" id="scoreDate">
+      </div>
       <div id="scoresBody">
         <p class="scores-note">Loading box scores…</p>
       </div>
@@ -311,13 +343,21 @@
     const panel = document.getElementById('scores');
     const heading = document.getElementById('scoresHeading');
     const body = document.getElementById('scoresBody');
+    const dateInput = document.getElementById('scoreDate');
     let loaded = false;
+
+    function todayISO() {
+      return new Date().toISOString().slice(0, 10);
+    }
 
     function yesterdayISO() {
       const d = new Date();
       d.setDate(d.getDate() - 1);
       return d.toISOString().slice(0, 10);
     }
+
+    dateInput.max = todayISO();
+    dateInput.value = yesterdayISO();
 
     function formatDateLabel(iso) {
       const [y, m, d] = iso.split('-').map(Number);
@@ -326,9 +366,9 @@
       });
     }
 
-    async function loadScores() {
-      const dateISO = yesterdayISO();
+    async function loadScores(dateISO) {
       heading.textContent = `MLB Box Scores — ${formatDateLabel(dateISO)}`;
+      body.innerHTML = '<p class="scores-note">Loading box scores…</p>';
       try {
         const res = await fetch(
           `https://statsapi.mlb.com/api/v1/schedule?sportId=1&date=${dateISO}&hydrate=linescore`
@@ -363,8 +403,14 @@
       btn.setAttribute('aria-expanded', String(isOpen));
       if (isOpen && !loaded) {
         loaded = true;
-        loadScores();
+        loadScores(dateInput.value);
       }
+    });
+
+    dateInput.addEventListener('change', () => {
+      if (!dateInput.value) return;
+      loaded = true;
+      loadScores(dateInput.value);
     });
 
     const navToggle = document.getElementById('navToggle');
