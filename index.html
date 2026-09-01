@@ -242,7 +242,7 @@
 
   <div class="scores" id="scores">
     <div class="scores-card">
-      <h2 id="scoresHeading">Yesterday in baseball</h2>
+      <h2 id="scoresHeading">Yesterday...</h2>
       <div id="scoresBody">
         <p class="scores-note">Loading box scores…</p>
       </div>
@@ -271,7 +271,7 @@
 
     async function loadScores() {
       const dateISO = yesterdayISO();
-      heading.textContent = `MLB box scores — ${formatDateLabel(dateISO)}`;
+      heading.textContent = `MLB Box Scores — ${formatDateLabel(dateISO)}`;
       try {
         const res = await fetch(
           `https://statsapi.mlb.com/api/v1/schedule?sportId=1&date=${dateISO}&hydrate=linescore`
