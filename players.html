@@ -403,7 +403,7 @@
         const res = await fetch(viaProxy(
           `https://site.web.api.espn.com/apis/search/v2?query=${encodeURIComponent(query)}&limit=25`
         ));
-        if (!res.ok) throw new Error('Search failed');
+        if (!res.ok) throw new Error(`Search request failed (HTTP ${res.status})`);
         const data = await res.json();
 
         const groups = data.results || [];
@@ -443,27 +443,22 @@
           loadPlayer(matches[0].id);
         }
       } catch (err) {
-        showNote(resultsArea, 'Couldn\'t search right now — try again in a bit.');
+        showNote(resultsArea, `Search didn't go through (${err.message}). Try again in a bit.`);
       }
     }
 
     async function fetchAthleteData(path, league, id) {
-      const endpoints = [
-        `https://site.web.api.espn.com/apis/common/v3/sports/${path}/${league}/athletes/${id}?region=us&lang=en`,
-        `https://site.web.api.espn.com/apis/common/v3/sports/${path}/${league}/athletes/${id}/overview?region=us&lang=en`
-      ];
-      for (const url of endpoints) {
-        try {
-          const res = await fetch(viaProxy(url));
-          if (!res.ok) continue;
-          const data = await res.json();
-          const athlete = data.athlete || data;
-          if (athlete && (athlete.displayName || athlete.fullName)) return athlete;
-        } catch (err) {
-          // try next endpoint
-        }
+      // Same domain your scores already fetch from directly (no proxy needed
+      // — this one does send proper CORS headers).
+      const url = `https://site.api.espn.com/apis/site/v2/sports/${path}/${league}/athletes/${id}`;
+      const res = await fetch(url);
+      if (!res.ok) throw new Error(`Player details request failed (HTTP ${res.status})`);
+      const data = await res.json();
+      const athlete = data.athlete || data;
+      if (!athlete || (!athlete.displayName && !athlete.fullName)) {
+        throw new Error('Player details came back empty');
       }
-      return null;
+      return athlete;
     }
 
     async function loadPlayer(id) {
@@ -472,7 +467,6 @@
 
       try {
         const athlete = await fetchAthleteData(path, league, id);
-        if (!athlete) throw new Error('Player fetch failed');
 
         const name = athlete.displayName || athlete.fullName || 'Unknown player';
         const team = athlete.team && athlete.team.displayName ? athlete.team.displayName : '';
@@ -509,7 +503,7 @@
             ${statHTML}
           </div>`;
       } catch (err) {
-        showNote(playerArea, 'Couldn\'t load that player\'s info right now — try again in a bit.');
+        showNote(playerArea, `Couldn't load that player's info (${err.message}). Try again in a bit.`);
       }
     }
 
