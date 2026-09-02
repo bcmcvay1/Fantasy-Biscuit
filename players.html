@@ -344,7 +344,7 @@
   <main class="main">
     <div class="lookup">
       <h1>Player Lookup</h1>
-      <p class="tagline">Search a player across MLB, NFL, NBA, or NHL for their age, height, weight, current team, and season stats.</p>
+      <p class="tagline">Search a player across MLB, NFL, NBA, or NHL for their height, weight, position, and current team.</p>
 
       <div class="sport-row" id="sportToggle" role="group" aria-label="Choose league">
         <button type="button" class="sport-btn active" data-sport="mlb">MLB</button>
@@ -400,30 +400,28 @@
       container.innerHTML = `<p class="lookup-note">${text}</p>`;
     }
 
+    // BALLDONTLIE is a documented, versioned API (unlike ESPN's undocumented
+    // one) covering all four leagues with a consistent shape. The Worker
+    // attaches the API key server-side, so it never appears in this file.
     async function searchPlayers(query) {
-      const { path, league } = SPORTS[currentSport];
+      const { league } = SPORTS[currentSport];
       showNote(resultsArea, 'Searching…');
       playerArea.innerHTML = '';
 
+      const parts = query.trim().split(/\s+/);
+      const lastName = parts.length > 1 ? parts.slice(1).join(' ') : parts[0];
+      const firstName = parts.length > 1 ? parts[0] : '';
+
+      const params = new URLSearchParams();
+      if (firstName) params.set('first_name', firstName);
+      params.set('last_name', lastName);
+
       try {
-        const res = await fetch(viaProxy(
-          `https://site.web.api.espn.com/apis/search/v2?query=${encodeURIComponent(query)}&limit=25`
-        ));
+        const url = `https://api.balldontlie.io/${league}/v1/players?${params.toString()}`;
+        const res = await fetch(viaProxy(url));
         if (!res.ok) throw new Error(`Search request failed (HTTP ${res.status})`);
         const data = await res.json();
-
-        const groups = data.results || [];
-        let matches = [];
-        groups.forEach(group => {
-          (group.contents || []).forEach(item => {
-            const itemType = (item.type || '').toLowerCase();
-            const itemSport = (item.sport || '').toLowerCase();
-            const itemLeague = (item.league || '').toLowerCase();
-            const isPlayer = itemType === 'player' || itemType === 'athlete';
-            const matchesLeague = itemLeague === league || (!itemLeague && itemSport === path);
-            if (isPlayer && matchesLeague) matches.push(item);
-          });
-        });
+        const matches = data.data || [];
 
         if (matches.length === 0) {
           showNote(resultsArea, `No ${SPORTS[currentSport].label} players found for "${query}".`);
@@ -437,122 +435,67 @@
           const row = document.createElement('button');
           row.type = 'button';
           row.className = 'result-row';
-          const teamName = item.team && item.team.name ? item.team.name : '';
-          row.innerHTML = `<span>${item.displayName || item.name || 'Unknown player'}</span>
+          const fullName = `${item.first_name || ''} ${item.last_name || ''}`.trim() || 'Unknown player';
+          const teamName = teamDisplayName(item.team);
+          row.innerHTML = `<span>${fullName}</span>
             <span class="sub">${teamName}</span>`;
-          row.addEventListener('click', () => loadPlayer(item.id, teamName));
+          row.addEventListener('click', () => showPlayer(item));
           list.appendChild(row);
         });
         resultsArea.appendChild(list);
 
         if (matches.length === 1) {
-          const only = matches[0];
-          const onlyTeam = only.team && only.team.name ? only.team.name : '';
-          loadPlayer(only.id, onlyTeam);
+          showPlayer(matches[0]);
         }
       } catch (err) {
         showNote(resultsArea, `Search didn't go through (${err.message}). Try again in a bit.`);
       }
     }
 
-    function statRowsFrom(data) {
-      const rows = [];
-      const stats = data && data.statistics;
-      if (!stats) return rows;
-      const categories = (stats.splits && stats.splits.categories) || stats.categories || [];
-      categories.forEach(cat => {
-        (cat.stats || []).forEach(s => {
-          const label = s.shortDisplayName || s.displayName || s.label || s.name;
-          const value = s.displayValue !== undefined ? s.displayValue : s.value;
-          if (label !== undefined && value !== undefined && value !== null && value !== '') {
-            rows.push({ label, value });
-          }
-        });
-      });
-      return rows;
+    function teamDisplayName(team) {
+      if (!team) return '';
+      return team.full_name || team.display_name ||
+        (team.city && team.name ? `${team.city} ${team.name}` : team.name || '');
     }
 
-    // Every "site" and "web" API athlete-detail route we tried gets a 403
-    // (ESPN appears to specifically guard detailed athlete data, even though
-    // search stays open). This is ESPN's separate "Core API" — different
-    // infrastructure, worth trying. Its athlete object uses raw numeric
-    // height/weight rather than pre-formatted display strings, and its
-    // "team" field is just a reference link rather than a name, so we fall
-    // back to the team name the search step already gave us.
-    function formatHeight(totalInches) {
-      if (!totalInches) return '';
-      const feet = Math.floor(totalInches / 12);
-      const inches = Math.round(totalInches % 12);
-      return `${feet}' ${inches}"`;
-    }
+    function showPlayer(item) {
+      const { label } = SPORTS[currentSport];
+      const name = `${item.first_name || ''} ${item.last_name || ''}`.trim() || 'Unknown player';
+      const team = teamDisplayName(item.team);
+      const jersey = item.jersey_number ? `#${item.jersey_number}` : '';
 
-    async function fetchPlayerOverview(path, league, id) {
-      const url = `https://sports.core.api.espn.com/v2/sports/${path}/leagues/${league}/athletes/${id}`;
-      const res = await fetch(viaProxy(url));
-      if (!res.ok) throw new Error(`Player details request failed (HTTP ${res.status})`);
-      const athlete = await res.json();
-      if (!athlete || (!athlete.displayName && !athlete.fullName)) {
-        throw new Error('Player details came back empty');
-      }
-      return { athlete, statRows: [] };
-    }
+      const metaParts = [label, item.position, jersey].filter(Boolean);
 
-    async function loadPlayer(id, fallbackTeam) {
-      const { path, league, label } = SPORTS[currentSport];
-      showNote(playerArea, 'Loading player…');
+      const bioBoxes = [
+        { lbl: 'Height', val: item.height },
+        { lbl: 'Weight', val: item.weight },
+        { lbl: 'Team', val: team },
+        { lbl: 'College', val: item.college },
+        { lbl: 'Country', val: item.country },
+        { lbl: 'Draft Year', val: item.draft_year }
+      ].filter(b => b.val !== undefined && b.val !== null && b.val !== '');
 
-      try {
-        const { athlete, statRows } = await fetchPlayerOverview(path, league, id);
+      const statHTML = bioBoxes.length
+        ? `<div class="stat-grid">${bioBoxes.map(b => `
+            <div class="stat-box">
+              <div class="val">${b.val}</div>
+              <div class="lbl">${b.lbl}</div>
+            </div>`).join('')}</div>`
+        : `<p class="lookup-note">Details aren't available for this player right now.</p>`;
 
-        const name = athlete.displayName || athlete.fullName || 'Unknown player';
-        const team = (athlete.team && athlete.team.displayName)
-          ? athlete.team.displayName
-          : (fallbackTeam || '');
-        const position = athlete.position && athlete.position.displayName ? athlete.position.displayName : '';
-        const jersey = athlete.jersey ? `#${athlete.jersey}` : '';
-        const headshot = athlete.headshot && athlete.headshot.href ? athlete.headshot.href : '';
-
-        const heightVal = athlete.displayHeight || formatHeight(athlete.height);
-        const weightVal = athlete.displayWeight || (athlete.weight ? `${athlete.weight} lbs` : '');
-
-        const metaParts = [label, position, jersey].filter(Boolean);
-
-        const bioBoxes = [
-          { lbl: 'Age', val: athlete.age },
-          { lbl: 'Height', val: heightVal },
-          { lbl: 'Weight', val: weightVal },
-          { lbl: 'Team', val: team }
-        ].filter(b => b.val !== undefined && b.val !== null && b.val !== '');
-
-        const allBoxes = bioBoxes.concat(
-          statRows.map(r => ({ lbl: r.label, val: r.value }))
-        );
-
-        const statHTML = allBoxes.length
-          ? `<div class="stat-grid">${allBoxes.map(b => `
-              <div class="stat-box">
-                <div class="val">${b.val}</div>
-                <div class="lbl">${b.lbl}</div>
-              </div>`).join('')}</div>`
-          : `<p class="lookup-note">Details aren't available for this player right now.</p>`;
-
-        playerArea.innerHTML = `
-          <div class="player-card">
-            <div class="player-head">
-              ${headshot ? `<img src="${headshot}" alt="${name}">` : ''}
-              <div>
-                <h2>${name}</h2>
-                <div class="meta">${metaParts.join(' · ')}</div>
-              </div>
+      playerArea.innerHTML = `
+        <div class="player-card">
+          <div class="player-head">
+            <div>
+              <h2>${name}</h2>
+              <div class="meta">${metaParts.join(' · ')}</div>
             </div>
-            ${statHTML}
-          </div>`;
-      } catch (err) {
-        showNote(playerArea, `Couldn't load that player's info (${err.message}). Try again in a bit.`);
-      }
+          </div>
+          ${statHTML}
+        </div>`;
     }
 
-    form.addEventListener('submit', (e) => {
+        form.addEventListener('submit', (e) => {
       e.preventDefault();
       const q = queryInput.value.trim();
       if (q) searchPlayers(q);
