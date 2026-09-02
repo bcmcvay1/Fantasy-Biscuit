@@ -344,7 +344,7 @@
   <main class="main">
     <div class="lookup">
       <h1>Player Lookup</h1>
-      <p class="tagline">Pick a league and team, then a player, to see their age, height, weight, and current team.</p>
+      <p class="tagline">Search a player across MLB, NFL, NBA, or NHL for their age, height, weight, current team, and season stats.</p>
 
       <div class="sport-row" id="sportToggle" role="group" aria-label="Choose league">
         <button type="button" class="sport-btn active" data-sport="mlb">MLB</button>
@@ -353,15 +353,10 @@
         <button type="button" class="sport-btn" data-sport="nhl">NHL</button>
       </div>
 
-      <div class="search-row">
-        <select id="teamSelect">
-          <option value="">Loading teams…</option>
-        </select>
-      </div>
-
-      <div class="search-row">
-        <input type="text" id="rosterFilter" placeholder="Filter this roster by name…" autocomplete="off" disabled>
-      </div>
+      <form class="search-row" id="searchForm">
+        <input type="text" id="playerQuery" placeholder="Player name, e.g. Aaron Judge" autocomplete="off">
+        <button type="submit">Search</button>
+      </form>
 
       <div id="resultsArea"></div>
       <div id="playerArea"></div>
@@ -376,118 +371,91 @@
       nhl: { path: 'hockey', league: 'nhl', label: 'NHL' }
     };
 
+    // Your personal Cloudflare Worker — fetches the target URL server-side
+    // and adds the CORS header browsers require, since ESPN's own endpoints
+    // don't send one for every route.
+    const PROXY_BASE = 'https://biscuit-cors-proxy.bcmcvay1.workers.dev/';
+    function viaProxy(url) {
+      return `${PROXY_BASE}?url=${encodeURIComponent(url)}`;
+    }
+
     const sportButtons = document.querySelectorAll('.sport-btn');
-    const teamSelect = document.getElementById('teamSelect');
-    const rosterFilter = document.getElementById('rosterFilter');
+    const form = document.getElementById('searchForm');
+    const queryInput = document.getElementById('playerQuery');
     const resultsArea = document.getElementById('resultsArea');
     const playerArea = document.getElementById('playerArea');
 
     let currentSport = 'mlb';
-    let currentRoster = [];
-    const teamsCache = {};
+
+    sportButtons.forEach(btn => {
+      btn.addEventListener('click', () => {
+        currentSport = btn.dataset.sport;
+        sportButtons.forEach(b => b.classList.toggle('active', b === btn));
+        resultsArea.innerHTML = '';
+        playerArea.innerHTML = '';
+      });
+    });
 
     function showNote(container, text) {
       container.innerHTML = `<p class="lookup-note">${text}</p>`;
     }
 
-    async function loadTeams(sportKey) {
-      if (teamsCache[sportKey]) return teamsCache[sportKey];
-      const { path, league } = SPORTS[sportKey];
-      const res = await fetch(
-        `https://site.api.espn.com/apis/site/v2/sports/${path}/${league}/teams?limit=100`
-      );
-      if (!res.ok) throw new Error(`Team list request failed (HTTP ${res.status})`);
-      const data = await res.json();
-      const leagues = (data.sports && data.sports[0] && data.sports[0].leagues) || [];
-      const teams = [];
-      leagues.forEach(l => {
-        (l.teams || []).forEach(t => {
-          const team = t.team || t;
-          teams.push({ id: team.id, name: team.displayName || team.name || 'Unnamed team' });
-        });
-      });
-      teams.sort((a, b) => a.name.localeCompare(b.name));
-      teamsCache[sportKey] = teams;
-      return teams;
-    }
-
-    async function populateTeamSelect() {
-      teamSelect.disabled = true;
-      teamSelect.innerHTML = '<option value="">Loading teams…</option>';
-      rosterFilter.value = '';
-      rosterFilter.disabled = true;
-      resultsArea.innerHTML = '';
-      playerArea.innerHTML = '';
-
-      try {
-        const teams = await loadTeams(currentSport);
-        teamSelect.innerHTML = '<option value="">Select a team…</option>' +
-          teams.map(t => `<option value="${t.id}">${t.name}</option>`).join('');
-        teamSelect.disabled = false;
-      } catch (err) {
-        teamSelect.innerHTML = '<option value="">Couldn\'t load teams</option>';
-        showNote(resultsArea, `Couldn't load the ${SPORTS[currentSport].label} team list (${err.message}).`);
-      }
-    }
-
-    function renderRoster(players) {
-      if (players.length === 0) {
-        showNote(resultsArea, 'No players match that filter.');
-        return;
-      }
-      const list = document.createElement('div');
-      list.className = 'results-list';
-      players.slice(0, 60).forEach(p => {
-        const row = document.createElement('button');
-        row.type = 'button';
-        row.className = 'result-row';
-        const posName = (p.position && (p.position.abbreviation || p.position.name)) || '';
-        row.innerHTML = `<span>${p.fullName || p.displayName || 'Unknown player'}</span>
-          <span class="sub">${posName}</span>`;
-        row.addEventListener('click', () => loadPlayer(p.id));
-        list.appendChild(row);
-      });
-      resultsArea.innerHTML = '';
-      resultsArea.appendChild(list);
-    }
-
-    async function loadRoster(teamId) {
+    async function searchPlayers(query) {
       const { path, league } = SPORTS[currentSport];
-      showNote(resultsArea, 'Loading roster…');
+      showNote(resultsArea, 'Searching…');
       playerArea.innerHTML = '';
-      rosterFilter.value = '';
-      rosterFilter.disabled = true;
-      currentRoster = [];
 
       try {
-        const res = await fetch(
-          `https://site.api.espn.com/apis/site/v2/sports/${path}/${league}/teams/${teamId}/roster`
-        );
-        if (!res.ok) throw new Error(`Roster request failed (HTTP ${res.status})`);
+        const res = await fetch(viaProxy(
+          `https://site.web.api.espn.com/apis/search/v2?query=${encodeURIComponent(query)}&limit=25`
+        ));
+        if (!res.ok) throw new Error(`Search request failed (HTTP ${res.status})`);
         const data = await res.json();
 
-        let players = [];
-        const groups = data.athletes || [];
-        groups.forEach(g => {
-          if (Array.isArray(g.items)) {
-            players = players.concat(g.items);
-          } else if (g.id) {
-            // flat athlete object rather than a position group
-            players.push(g);
-          }
+        const groups = data.results || [];
+        let matches = [];
+        groups.forEach(group => {
+          (group.contents || []).forEach(item => {
+            const itemType = (item.type || '').toLowerCase();
+            const itemSport = (item.sport || '').toLowerCase();
+            const itemLeague = (item.league || '').toLowerCase();
+            const isPlayer = itemType === 'player' || itemType === 'athlete';
+            const matchesLeague = itemLeague === league || (!itemLeague && itemSport === path);
+            if (isPlayer && matchesLeague) matches.push(item);
+          });
         });
 
-        currentRoster = players;
-        rosterFilter.disabled = false;
-        renderRoster(players);
+        if (matches.length === 0) {
+          showNote(resultsArea, `No ${SPORTS[currentSport].label} players found for "${query}".`);
+          return;
+        }
+
+        resultsArea.innerHTML = '';
+        const list = document.createElement('div');
+        list.className = 'results-list';
+        matches.slice(0, 8).forEach(item => {
+          const row = document.createElement('button');
+          row.type = 'button';
+          row.className = 'result-row';
+          const teamName = item.team && item.team.name ? item.team.name : '';
+          row.innerHTML = `<span>${item.displayName || item.name || 'Unknown player'}</span>
+            <span class="sub">${teamName}</span>`;
+          row.addEventListener('click', () => loadPlayer(item.id));
+          list.appendChild(row);
+        });
+        resultsArea.appendChild(list);
+
+        if (matches.length === 1) {
+          loadPlayer(matches[0].id);
+        }
       } catch (err) {
-        showNote(resultsArea, `Couldn't load that roster (${err.message}).`);
+        showNote(resultsArea, `Search didn't go through (${err.message}). Try again in a bit.`);
       }
     }
 
-    async function fetchAthleteData(path, league, id) {
+    async function fetchBio(path, league, id) {
       const url = `https://site.api.espn.com/apis/site/v2/sports/${path}/${league}/athletes/${id}`;
-      const res = await fetch(url);
+      const res = await fetch(viaProxy(url));
       if (!res.ok) throw new Error(`Player details request failed (HTTP ${res.status})`);
       const data = await res.json();
       const athlete = data.athlete || data;
@@ -497,12 +465,44 @@
       return athlete;
     }
 
+    function statRowsFrom(data) {
+      const rows = [];
+      const stats = data && data.statistics;
+      if (!stats) return rows;
+      const categories = (stats.splits && stats.splits.categories) || stats.categories || [];
+      categories.forEach(cat => {
+        (cat.stats || []).forEach(s => {
+          const label = s.shortDisplayName || s.displayName || s.label || s.name;
+          const value = s.displayValue !== undefined ? s.displayValue : s.value;
+          if (label !== undefined && value !== undefined && value !== null && value !== '') {
+            rows.push({ label, value });
+          }
+        });
+      });
+      return rows;
+    }
+
+    async function fetchSeasonStats(path, league, id) {
+      try {
+        const url = `https://site.web.api.espn.com/apis/common/v3/sports/${path}/${league}/athletes/${id}/overview?region=us&lang=en`;
+        const res = await fetch(viaProxy(url));
+        if (!res.ok) return [];
+        const data = await res.json();
+        return statRowsFrom(data).slice(0, 8);
+      } catch (err) {
+        return [];
+      }
+    }
+
     async function loadPlayer(id) {
       const { path, league, label } = SPORTS[currentSport];
       showNote(playerArea, 'Loading player…');
 
       try {
-        const athlete = await fetchAthleteData(path, league, id);
+        const [athlete, statRows] = await Promise.all([
+          fetchBio(path, league, id),
+          fetchSeasonStats(path, league, id)
+        ]);
 
         const name = athlete.displayName || athlete.fullName || 'Unknown player';
         const team = athlete.team && athlete.team.displayName ? athlete.team.displayName : '';
@@ -519,8 +519,12 @@
           { lbl: 'Team', val: team }
         ].filter(b => b.val !== undefined && b.val !== null && b.val !== '');
 
-        const statHTML = bioBoxes.length
-          ? `<div class="stat-grid">${bioBoxes.map(b => `
+        const allBoxes = bioBoxes.concat(
+          statRows.map(r => ({ lbl: r.label, val: r.value }))
+        );
+
+        const statHTML = allBoxes.length
+          ? `<div class="stat-grid">${allBoxes.map(b => `
               <div class="stat-box">
                 <div class="val">${b.val}</div>
                 <div class="lbl">${b.lbl}</div>
@@ -543,36 +547,11 @@
       }
     }
 
-    sportButtons.forEach(btn => {
-      btn.addEventListener('click', () => {
-        currentSport = btn.dataset.sport;
-        sportButtons.forEach(b => b.classList.toggle('active', b === btn));
-        populateTeamSelect();
-      });
+    form.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const q = queryInput.value.trim();
+      if (q) searchPlayers(q);
     });
-
-    teamSelect.addEventListener('change', () => {
-      const teamId = teamSelect.value;
-      playerArea.innerHTML = '';
-      if (teamId) {
-        loadRoster(teamId);
-      } else {
-        resultsArea.innerHTML = '';
-        rosterFilter.value = '';
-        rosterFilter.disabled = true;
-        currentRoster = [];
-      }
-    });
-
-    rosterFilter.addEventListener('input', () => {
-      const q = rosterFilter.value.trim().toLowerCase();
-      const filtered = q
-        ? currentRoster.filter(p => (p.fullName || p.displayName || '').toLowerCase().includes(q))
-        : currentRoster;
-      renderRoster(filtered);
-    });
-
-    populateTeamSelect();
 
     const navToggle = document.getElementById('navToggle');
     const navOverlay = document.getElementById('navOverlay');
