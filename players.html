@@ -191,7 +191,8 @@
     margin-bottom: 1.2rem;
   }
 
-  .search-row input[type="text"] {
+  .search-row input[type="text"],
+  .search-row select {
     flex: 1;
     font-family: 'Inter', sans-serif;
     font-size: 1rem;
@@ -201,9 +202,14 @@
     border-radius: 10px;
     padding: .65rem .9rem;
   }
-  .search-row input[type="text"]:focus-visible {
+  .search-row input[type="text"]:focus-visible,
+  .search-row select:focus-visible {
     outline: 2px solid var(--biscuit-shadow);
     outline-offset: 1px;
+  }
+  .search-row input[type="text"]:disabled,
+  .search-row select:disabled {
+    opacity: .6;
   }
 
   .search-row button {
@@ -338,7 +344,7 @@
   <main class="main">
     <div class="lookup">
       <h1>Player Lookup</h1>
-      <p class="tagline">Search a player across MLB, NFL, NBA, or NHL for their age, height, weight, and current team.</p>
+      <p class="tagline">Pick a league and team, then a player, to see their age, height, weight, and current team.</p>
 
       <div class="sport-row" id="sportToggle" role="group" aria-label="Choose league">
         <button type="button" class="sport-btn active" data-sport="mlb">MLB</button>
@@ -347,10 +353,15 @@
         <button type="button" class="sport-btn" data-sport="nhl">NHL</button>
       </div>
 
-      <form class="search-row" id="searchForm">
-        <input type="text" id="playerQuery" placeholder="Player name, e.g. Aaron Judge" autocomplete="off">
-        <button type="submit">Search</button>
-      </form>
+      <div class="search-row">
+        <select id="teamSelect">
+          <option value="">Loading teams…</option>
+        </select>
+      </div>
+
+      <div class="search-row">
+        <input type="text" id="rosterFilter" placeholder="Filter this roster by name…" autocomplete="off" disabled>
+      </div>
 
       <div id="resultsArea"></div>
       <div id="playerArea"></div>
@@ -366,90 +377,115 @@
     };
 
     const sportButtons = document.querySelectorAll('.sport-btn');
-    const form = document.getElementById('searchForm');
-    const queryInput = document.getElementById('playerQuery');
+    const teamSelect = document.getElementById('teamSelect');
+    const rosterFilter = document.getElementById('rosterFilter');
     const resultsArea = document.getElementById('resultsArea');
     const playerArea = document.getElementById('playerArea');
 
     let currentSport = 'mlb';
-
-    sportButtons.forEach(btn => {
-      btn.addEventListener('click', () => {
-        currentSport = btn.dataset.sport;
-        sportButtons.forEach(b => b.classList.toggle('active', b === btn));
-        resultsArea.innerHTML = '';
-        playerArea.innerHTML = '';
-      });
-    });
+    let currentRoster = [];
+    const teamsCache = {};
 
     function showNote(container, text) {
       container.innerHTML = `<p class="lookup-note">${text}</p>`;
     }
 
-    // ESPN's player-search and athlete endpoints don't send CORS headers,
-    // so the browser blocks them when called directly. Route through a
-    // CORS-friendly relay that fetches the URL server-side and re-serves
-    // it with permissive headers.
-    function viaProxy(url) {
-      return `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
+    async function loadTeams(sportKey) {
+      if (teamsCache[sportKey]) return teamsCache[sportKey];
+      const { path, league } = SPORTS[sportKey];
+      const res = await fetch(
+        `https://site.api.espn.com/apis/site/v2/sports/${path}/${league}/teams?limit=100`
+      );
+      if (!res.ok) throw new Error(`Team list request failed (HTTP ${res.status})`);
+      const data = await res.json();
+      const leagues = (data.sports && data.sports[0] && data.sports[0].leagues) || [];
+      const teams = [];
+      leagues.forEach(l => {
+        (l.teams || []).forEach(t => {
+          const team = t.team || t;
+          teams.push({ id: team.id, name: team.displayName || team.name || 'Unnamed team' });
+        });
+      });
+      teams.sort((a, b) => a.name.localeCompare(b.name));
+      teamsCache[sportKey] = teams;
+      return teams;
     }
 
-    async function searchPlayers(query) {
-      const { path, league } = SPORTS[currentSport];
-      showNote(resultsArea, 'Searching…');
+    async function populateTeamSelect() {
+      teamSelect.disabled = true;
+      teamSelect.innerHTML = '<option value="">Loading teams…</option>';
+      rosterFilter.value = '';
+      rosterFilter.disabled = true;
+      resultsArea.innerHTML = '';
       playerArea.innerHTML = '';
 
       try {
-        const res = await fetch(viaProxy(
-          `https://site.web.api.espn.com/apis/search/v2?query=${encodeURIComponent(query)}&limit=25`
-        ));
-        if (!res.ok) throw new Error(`Search request failed (HTTP ${res.status})`);
+        const teams = await loadTeams(currentSport);
+        teamSelect.innerHTML = '<option value="">Select a team…</option>' +
+          teams.map(t => `<option value="${t.id}">${t.name}</option>`).join('');
+        teamSelect.disabled = false;
+      } catch (err) {
+        teamSelect.innerHTML = '<option value="">Couldn\'t load teams</option>';
+        showNote(resultsArea, `Couldn't load the ${SPORTS[currentSport].label} team list (${err.message}).`);
+      }
+    }
+
+    function renderRoster(players) {
+      if (players.length === 0) {
+        showNote(resultsArea, 'No players match that filter.');
+        return;
+      }
+      const list = document.createElement('div');
+      list.className = 'results-list';
+      players.slice(0, 60).forEach(p => {
+        const row = document.createElement('button');
+        row.type = 'button';
+        row.className = 'result-row';
+        const posName = (p.position && (p.position.abbreviation || p.position.name)) || '';
+        row.innerHTML = `<span>${p.fullName || p.displayName || 'Unknown player'}</span>
+          <span class="sub">${posName}</span>`;
+        row.addEventListener('click', () => loadPlayer(p.id));
+        list.appendChild(row);
+      });
+      resultsArea.innerHTML = '';
+      resultsArea.appendChild(list);
+    }
+
+    async function loadRoster(teamId) {
+      const { path, league } = SPORTS[currentSport];
+      showNote(resultsArea, 'Loading roster…');
+      playerArea.innerHTML = '';
+      rosterFilter.value = '';
+      rosterFilter.disabled = true;
+      currentRoster = [];
+
+      try {
+        const res = await fetch(
+          `https://site.api.espn.com/apis/site/v2/sports/${path}/${league}/teams/${teamId}/roster`
+        );
+        if (!res.ok) throw new Error(`Roster request failed (HTTP ${res.status})`);
         const data = await res.json();
 
-        const groups = data.results || [];
-        let matches = [];
-        groups.forEach(group => {
-          (group.contents || []).forEach(item => {
-            const itemType = (item.type || '').toLowerCase();
-            const itemSport = (item.sport || '').toLowerCase();
-            const itemLeague = (item.league || '').toLowerCase();
-            const isPlayer = itemType === 'player' || itemType === 'athlete';
-            const matchesLeague = itemLeague === league || (!itemLeague && itemSport === path);
-            if (isPlayer && matchesLeague) matches.push(item);
-          });
+        let players = [];
+        const groups = data.athletes || [];
+        groups.forEach(g => {
+          if (Array.isArray(g.items)) {
+            players = players.concat(g.items);
+          } else if (g.id) {
+            // flat athlete object rather than a position group
+            players.push(g);
+          }
         });
 
-        if (matches.length === 0) {
-          showNote(resultsArea, `No ${SPORTS[currentSport].label} players found for "${query}".`);
-          return;
-        }
-
-        resultsArea.innerHTML = '';
-        const list = document.createElement('div');
-        list.className = 'results-list';
-        matches.slice(0, 8).forEach(item => {
-          const row = document.createElement('button');
-          row.type = 'button';
-          row.className = 'result-row';
-          const teamName = item.team && item.team.name ? item.team.name : '';
-          row.innerHTML = `<span>${item.displayName || item.name || 'Unknown player'}</span>
-            <span class="sub">${teamName}</span>`;
-          row.addEventListener('click', () => loadPlayer(item.id));
-          list.appendChild(row);
-        });
-        resultsArea.appendChild(list);
-
-        if (matches.length === 1) {
-          loadPlayer(matches[0].id);
-        }
+        currentRoster = players;
+        rosterFilter.disabled = false;
+        renderRoster(players);
       } catch (err) {
-        showNote(resultsArea, `Search didn't go through (${err.message}). Try again in a bit.`);
+        showNote(resultsArea, `Couldn't load that roster (${err.message}).`);
       }
     }
 
     async function fetchAthleteData(path, league, id) {
-      // Same domain your scores already fetch from directly (no proxy needed
-      // — this one does send proper CORS headers).
       const url = `https://site.api.espn.com/apis/site/v2/sports/${path}/${league}/athletes/${id}`;
       const res = await fetch(url);
       if (!res.ok) throw new Error(`Player details request failed (HTTP ${res.status})`);
@@ -507,11 +543,36 @@
       }
     }
 
-    form.addEventListener('submit', (e) => {
-      e.preventDefault();
-      const q = queryInput.value.trim();
-      if (q) searchPlayers(q);
+    sportButtons.forEach(btn => {
+      btn.addEventListener('click', () => {
+        currentSport = btn.dataset.sport;
+        sportButtons.forEach(b => b.classList.toggle('active', b === btn));
+        populateTeamSelect();
+      });
     });
+
+    teamSelect.addEventListener('change', () => {
+      const teamId = teamSelect.value;
+      playerArea.innerHTML = '';
+      if (teamId) {
+        loadRoster(teamId);
+      } else {
+        resultsArea.innerHTML = '';
+        rosterFilter.value = '';
+        rosterFilter.disabled = true;
+        currentRoster = [];
+      }
+    });
+
+    rosterFilter.addEventListener('input', () => {
+      const q = rosterFilter.value.trim().toLowerCase();
+      const filtered = q
+        ? currentRoster.filter(p => (p.fullName || p.displayName || '').toLowerCase().includes(q))
+        : currentRoster;
+      renderRoster(filtered);
+    });
+
+    populateTeamSelect();
 
     const navToggle = document.getElementById('navToggle');
     const navOverlay = document.getElementById('navOverlay');
