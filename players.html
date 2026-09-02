@@ -338,7 +338,7 @@
   <main class="main">
     <div class="lookup">
       <h1>Player Lookup</h1>
-      <p class="tagline">Search a player across MLB, NFL, NBA, or NHL.</p>
+      <p class="tagline">Search a player across MLB, NFL, NBA, or NHL for their age, height, weight, and current team.</p>
 
       <div class="sport-row" id="sportToggle" role="group" aria-label="Choose league">
         <button type="button" class="sport-btn active" data-sport="mlb">MLB</button>
@@ -439,21 +439,23 @@
       }
     }
 
-    function statRowsFrom(data) {
-      const rows = [];
-      const stats = data.statistics;
-      if (!stats) return rows;
-      const categories = (stats.splits && stats.splits.categories) || stats.categories || [];
-      categories.forEach(cat => {
-        (cat.stats || []).forEach(s => {
-          const label = s.shortDisplayName || s.displayName || s.label || s.name;
-          const value = s.displayValue !== undefined ? s.displayValue : s.value;
-          if (label !== undefined && value !== undefined && value !== null && value !== '') {
-            rows.push({ label, value });
-          }
-        });
-      });
-      return rows;
+    async function fetchAthleteData(path, league, id) {
+      const endpoints = [
+        `https://site.web.api.espn.com/apis/common/v3/sports/${path}/${league}/athletes/${id}?region=us&lang=en`,
+        `https://site.web.api.espn.com/apis/common/v3/sports/${path}/${league}/athletes/${id}/overview?region=us&lang=en`
+      ];
+      for (const url of endpoints) {
+        try {
+          const res = await fetch(url);
+          if (!res.ok) continue;
+          const data = await res.json();
+          const athlete = data.athlete || data;
+          if (athlete && (athlete.displayName || athlete.fullName)) return athlete;
+        } catch (err) {
+          // try next endpoint
+        }
+      }
+      return null;
     }
 
     async function loadPlayer(id) {
@@ -461,29 +463,31 @@
       showNote(playerArea, 'Loading player…');
 
       try {
-        const res = await fetch(
-          `https://site.web.api.espn.com/apis/common/v3/sports/${path}/${league}/athletes/${id}/overview`
-        );
-        if (!res.ok) throw new Error('Player fetch failed');
-        const data = await res.json();
+        const athlete = await fetchAthleteData(path, league, id);
+        if (!athlete) throw new Error('Player fetch failed');
 
-        const athlete = data.athlete || {};
         const name = athlete.displayName || athlete.fullName || 'Unknown player';
         const team = athlete.team && athlete.team.displayName ? athlete.team.displayName : '';
         const position = athlete.position && athlete.position.displayName ? athlete.position.displayName : '';
         const jersey = athlete.jersey ? `#${athlete.jersey}` : '';
         const headshot = athlete.headshot && athlete.headshot.href ? athlete.headshot.href : '';
 
-        const metaParts = [label, position, team, jersey].filter(Boolean);
-        const statRows = statRowsFrom(data).slice(0, 12);
+        const metaParts = [label, position, jersey].filter(Boolean);
 
-        const statHTML = statRows.length
-          ? `<div class="stat-grid">${statRows.map(r => `
+        const bioBoxes = [
+          { lbl: 'Age', val: athlete.age },
+          { lbl: 'Height', val: athlete.displayHeight },
+          { lbl: 'Weight', val: athlete.displayWeight },
+          { lbl: 'Team', val: team }
+        ].filter(b => b.val !== undefined && b.val !== null && b.val !== '');
+
+        const statHTML = bioBoxes.length
+          ? `<div class="stat-grid">${bioBoxes.map(b => `
               <div class="stat-box">
-                <div class="val">${r.value}</div>
-                <div class="lbl">${r.label}</div>
+                <div class="val">${b.val}</div>
+                <div class="lbl">${b.lbl}</div>
               </div>`).join('')}</div>`
-          : `<p class="lookup-note">Detailed stats aren't available for this player right now.</p>`;
+          : `<p class="lookup-note">Details aren't available for this player right now.</p>`;
 
         playerArea.innerHTML = `
           <div class="player-card">
@@ -497,7 +501,7 @@
             ${statHTML}
           </div>`;
       } catch (err) {
-        showNote(playerArea, 'Couldn\'t load that player\'s stats right now — try again in a bit.');
+        showNote(playerArea, 'Couldn\'t load that player\'s info right now — try again in a bit.');
       }
     }
 
