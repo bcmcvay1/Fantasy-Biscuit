@@ -453,18 +453,6 @@
       }
     }
 
-    async function fetchBio(path, league, id) {
-      const url = `https://site.api.espn.com/apis/site/v2/sports/${path}/${league}/athletes/${id}`;
-      const res = await fetch(viaProxy(url));
-      if (!res.ok) throw new Error(`Player details request failed (HTTP ${res.status})`);
-      const data = await res.json();
-      const athlete = data.athlete || data;
-      if (!athlete || (!athlete.displayName && !athlete.fullName)) {
-        throw new Error('Player details came back empty');
-      }
-      return athlete;
-    }
-
     function statRowsFrom(data) {
       const rows = [];
       const stats = data && data.statistics;
@@ -482,16 +470,20 @@
       return rows;
     }
 
-    async function fetchSeasonStats(path, league, id) {
-      try {
-        const url = `https://site.web.api.espn.com/apis/common/v3/sports/${path}/${league}/athletes/${id}/overview?region=us&lang=en`;
-        const res = await fetch(viaProxy(url));
-        if (!res.ok) return [];
-        const data = await res.json();
-        return statRowsFrom(data).slice(0, 8);
-      } catch (err) {
-        return [];
+    // site.api.espn.com blocks requests from Cloudflare's network (403), but
+    // site.web.api.espn.com — the same domain search already uses — doesn't.
+    // Its /overview endpoint conveniently includes both bio and season stats
+    // in one response, so we only need this one call.
+    async function fetchPlayerOverview(path, league, id) {
+      const url = `https://site.web.api.espn.com/apis/common/v3/sports/${path}/${league}/athletes/${id}/overview?region=us&lang=en`;
+      const res = await fetch(viaProxy(url));
+      if (!res.ok) throw new Error(`Player details request failed (HTTP ${res.status})`);
+      const data = await res.json();
+      const athlete = data.athlete || {};
+      if (!athlete || (!athlete.displayName && !athlete.fullName)) {
+        throw new Error('Player details came back empty');
       }
+      return { athlete, statRows: statRowsFrom(data).slice(0, 8) };
     }
 
     async function loadPlayer(id) {
@@ -499,10 +491,7 @@
       showNote(playerArea, 'Loading player…');
 
       try {
-        const [athlete, statRows] = await Promise.all([
-          fetchBio(path, league, id),
-          fetchSeasonStats(path, league, id)
-        ]);
+        const { athlete, statRows } = await fetchPlayerOverview(path, league, id);
 
         const name = athlete.displayName || athlete.fullName || 'Unknown player';
         const team = athlete.team && athlete.team.displayName ? athlete.team.displayName : '';
