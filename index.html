@@ -356,10 +356,12 @@
 
   <div class="scores" id="scores">
     <div class="scores-card">
-      <h2 id="scoresHeading">Box scores</h2>
+      <h2 id="scoresHeading">Box Scores</h2>
       <div class="sport-row" id="sportToggle" role="group" aria-label="Choose league">
         <button type="button" class="sport-btn active" data-sport="mlb">MLB</button>
         <button type="button" class="sport-btn" data-sport="nfl">NFL</button>
+        <button type="button" class="sport-btn" data-sport="nba">NBA</button>
+        <button type="button" class="sport-btn" data-sport="nhl">NHL</button>
       </div>
       <div class="date-row">
         <label for="scoreDate">Date</label>
@@ -427,17 +429,24 @@
       }).join('');
     }
 
-    async function loadNFL(dateISO) {
+    const ESPN_SPORTS = {
+      nfl: { path: 'football/nfl', label: 'NFL' },
+      nba: { path: 'basketball/nba', label: 'NBA' },
+      nhl: { path: 'hockey/nhl', label: 'NHL' }
+    };
+
+    async function loadFromESPN(sportKey, dateISO) {
+      const { path, label } = ESPN_SPORTS[sportKey];
       const compact = dateISO.replace(/-/g, '');
       const res = await fetch(
-        `https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard?dates=${compact}`
+        `https://site.api.espn.com/apis/site/v2/sports/${path}/scoreboard?dates=${compact}`
       );
       if (!res.ok) throw new Error('Request failed');
       const data = await res.json();
       const events = data.events || [];
 
       if (events.length === 0) {
-        body.innerHTML = '<p class="scores-note">No NFL games were played that day.</p>';
+        body.innerHTML = `<p class="scores-note">No ${label} games were played that day.</p>`;
         return;
       }
 
@@ -457,14 +466,14 @@
     }
 
     async function loadScores(dateISO) {
-      const label = currentSport === 'mlb' ? 'MLB' : 'NFL';
+      const label = currentSport === 'mlb' ? 'MLB' : ESPN_SPORTS[currentSport].label;
       heading.textContent = `${label} Box Scores — ${formatDateLabel(dateISO)}`;
       body.innerHTML = '<p class="scores-note">Loading box scores…</p>';
       try {
         if (currentSport === 'mlb') {
           await loadMLB(dateISO);
         } else {
-          await loadNFL(dateISO);
+          await loadFromESPN(currentSport, dateISO);
         }
       } catch (err) {
         body.innerHTML = '<p class="scores-note">Couldn\'t load box scores right now — try again in a bit.</p>';
