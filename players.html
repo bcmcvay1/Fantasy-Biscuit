@@ -386,15 +386,23 @@
       container.innerHTML = `<p class="lookup-note">${text}</p>`;
     }
 
+    // ESPN's player-search and athlete endpoints don't send CORS headers,
+    // so the browser blocks them when called directly. Route through a
+    // CORS-friendly relay that fetches the URL server-side and re-serves
+    // it with permissive headers.
+    function viaProxy(url) {
+      return `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
+    }
+
     async function searchPlayers(query) {
       const { path, league } = SPORTS[currentSport];
       showNote(resultsArea, 'Searching…');
       playerArea.innerHTML = '';
 
       try {
-        const res = await fetch(
+        const res = await fetch(viaProxy(
           `https://site.web.api.espn.com/apis/search/v2?query=${encodeURIComponent(query)}&limit=25`
-        );
+        ));
         if (!res.ok) throw new Error('Search failed');
         const data = await res.json();
 
@@ -446,7 +454,7 @@
       ];
       for (const url of endpoints) {
         try {
-          const res = await fetch(url);
+          const res = await fetch(viaProxy(url));
           if (!res.ok) continue;
           const data = await res.json();
           const athlete = data.athlete || data;
