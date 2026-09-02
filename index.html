@@ -248,6 +248,35 @@
     margin-bottom: .9rem;
   }
 
+  .sport-row {
+    display: flex;
+    gap: .5rem;
+    margin-bottom: .9rem;
+  }
+
+  .sport-btn {
+    font-family: 'Baloo 2', sans-serif;
+    font-weight: 500;
+    font-size: .88rem;
+    color: var(--ink);
+    background: var(--cream);
+    border: 1px solid var(--cream-deep);
+    border-radius: 20px;
+    padding: .4rem 1rem;
+    cursor: pointer;
+    transition: background .15s ease, color .15s ease;
+  }
+  .sport-btn:hover { background: var(--cream-deep); }
+  .sport-btn.active {
+    background: var(--biscuit);
+    border-color: var(--biscuit);
+    color: #FFFDF7;
+  }
+  .sport-btn:focus-visible {
+    outline: 2px solid var(--biscuit-shadow);
+    outline-offset: 2px;
+  }
+
   .date-row label {
     font-family: 'Baloo 2', sans-serif;
     font-size: .9rem;
@@ -328,6 +357,10 @@
   <div class="scores" id="scores">
     <div class="scores-card">
       <h2 id="scoresHeading">Box scores</h2>
+      <div class="sport-row" id="sportToggle" role="group" aria-label="Choose league">
+        <button type="button" class="sport-btn active" data-sport="mlb">MLB</button>
+        <button type="button" class="sport-btn" data-sport="nfl">NFL</button>
+      </div>
       <div class="date-row">
         <label for="scoreDate">Date</label>
         <input type="date" id="scoreDate">
@@ -344,7 +377,9 @@
     const heading = document.getElementById('scoresHeading');
     const body = document.getElementById('scoresBody');
     const dateInput = document.getElementById('scoreDate');
+    const sportButtons = document.querySelectorAll('.sport-btn');
     let loaded = false;
+    let currentSport = 'mlb';
 
     function todayISO() {
       return new Date().toISOString().slice(0, 10);
@@ -366,37 +401,84 @@
       });
     }
 
+    async function loadMLB(dateISO) {
+      const res = await fetch(
+        `https://statsapi.mlb.com/api/v1/schedule?sportId=1&date=${dateISO}&hydrate=linescore`
+      );
+      if (!res.ok) throw new Error('Request failed');
+      const data = await res.json();
+      const games = (data.dates && data.dates[0] && data.dates[0].games) || [];
+
+      if (games.length === 0) {
+        body.innerHTML = '<p class="scores-note">No MLB games were played that day.</p>';
+        return;
+      }
+
+      body.innerHTML = games.map(g => {
+        const away = g.teams.away, home = g.teams.home;
+        const played = g.status && g.status.abstractGameState === 'Final';
+        const line = played
+          ? `${away.score}–${home.score}`
+          : (g.status ? g.status.detailedState : '');
+        return `<div class="game-row">
+          <span>${away.team.name} @ ${home.team.name}</span>
+          <span class="status">${line}</span>
+        </div>`;
+      }).join('');
+    }
+
+    async function loadNFL(dateISO) {
+      const compact = dateISO.replace(/-/g, '');
+      const res = await fetch(
+        `https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard?dates=${compact}`
+      );
+      if (!res.ok) throw new Error('Request failed');
+      const data = await res.json();
+      const events = data.events || [];
+
+      if (events.length === 0) {
+        body.innerHTML = '<p class="scores-note">No NFL games were played that day.</p>';
+        return;
+      }
+
+      body.innerHTML = events.map(ev => {
+        const comp = ev.competitions[0];
+        const away = comp.competitors.find(c => c.homeAway === 'away');
+        const home = comp.competitors.find(c => c.homeAway === 'home');
+        const played = ev.status && ev.status.type && ev.status.type.completed;
+        const line = played
+          ? `${away.score}–${home.score}`
+          : (ev.status && ev.status.type ? ev.status.type.shortDetail : '');
+        return `<div class="game-row">
+          <span>${away.team.displayName} @ ${home.team.displayName}</span>
+          <span class="status">${line}</span>
+        </div>`;
+      }).join('');
+    }
+
     async function loadScores(dateISO) {
-      heading.textContent = `MLB Box Scores — ${formatDateLabel(dateISO)}`;
+      const label = currentSport === 'mlb' ? 'MLB' : 'NFL';
+      heading.textContent = `${label} Box Scores — ${formatDateLabel(dateISO)}`;
       body.innerHTML = '<p class="scores-note">Loading box scores…</p>';
       try {
-        const res = await fetch(
-          `https://statsapi.mlb.com/api/v1/schedule?sportId=1&date=${dateISO}&hydrate=linescore`
-        );
-        if (!res.ok) throw new Error('Request failed');
-        const data = await res.json();
-        const games = (data.dates && data.dates[0] && data.dates[0].games) || [];
-
-        if (games.length === 0) {
-          body.innerHTML = '<p class="scores-note">No MLB games were played that day.</p>';
-          return;
+        if (currentSport === 'mlb') {
+          await loadMLB(dateISO);
+        } else {
+          await loadNFL(dateISO);
         }
-
-        body.innerHTML = games.map(g => {
-          const away = g.teams.away, home = g.teams.home;
-          const played = g.status && g.status.abstractGameState === 'Final';
-          const line = played
-            ? `${away.score}–${home.score}`
-            : (g.status ? g.status.detailedState : '');
-          return `<div class="game-row">
-            <span>${away.team.name} @ ${home.team.name}</span>
-            <span class="status">${line}</span>
-          </div>`;
-        }).join('');
       } catch (err) {
         body.innerHTML = '<p class="scores-note">Couldn\'t load box scores right now — try again in a bit.</p>';
       }
     }
+
+    sportButtons.forEach(sBtn => {
+      sBtn.addEventListener('click', () => {
+        if (sBtn.dataset.sport === currentSport) return;
+        currentSport = sBtn.dataset.sport;
+        sportButtons.forEach(b => b.classList.toggle('active', b === sBtn));
+        loadScores(dateInput.value);
+      });
+    });
 
     btn.addEventListener('click', () => {
       const isOpen = panel.classList.toggle('open');
