@@ -1,0 +1,524 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Players — Fantasy Biscuit</title>
+<meta name="description" content="Look up a player and their stats.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;700&family=Inter:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --cream: #FBF1DE;
+    --cream-deep: #F3E4C4;
+    --biscuit: #DFA25D;
+    --biscuit-dark: #B97A3E;
+    --biscuit-shadow: #8A5A2C;
+    --ink: #5C3A1E;
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body { margin: 0; min-height: 100%; }
+
+  body {
+    display: flex;
+    align-items: stretch;
+    min-height: 100vh;
+    font-family: 'Inter', sans-serif;
+  }
+
+  /* ---- Sidebar navigation ---- */
+  .sidebar {
+    width: 220px;
+    flex-shrink: 0;
+    background: var(--cream-deep);
+    border-right: 1px solid rgba(138, 90, 44, 0.15);
+    padding: 2rem 1.4rem;
+    display: flex;
+    flex-direction: column;
+    gap: 2rem;
+  }
+
+  .brand {
+    font-family: 'Baloo 2', sans-serif;
+    font-weight: 700;
+    font-size: 1.15rem;
+    color: var(--ink);
+    text-decoration: none;
+    line-height: 1.2;
+  }
+
+  .nav-links {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: .35rem;
+  }
+
+  .nav-links a {
+    display: block;
+    padding: .6rem .8rem;
+    border-radius: 10px;
+    font-family: 'Baloo 2', sans-serif;
+    font-weight: 500;
+    font-size: .98rem;
+    color: var(--ink);
+    text-decoration: none;
+    transition: background .15s ease;
+  }
+  .nav-links a:hover { background: rgba(138, 90, 44, 0.1); }
+  .nav-links a[aria-current="page"] {
+    background: var(--biscuit);
+    color: #FFFDF7;
+  }
+
+  .hamburger {
+    display: none;
+    position: fixed;
+    top: 1rem;
+    left: 1rem;
+    z-index: 20;
+    width: 42px;
+    height: 42px;
+    border: none;
+    border-radius: 10px;
+    background: var(--cream-deep);
+    box-shadow: 0 2px 8px rgba(92, 58, 30, 0.15);
+    cursor: pointer;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .hamburger span {
+    display: block;
+    width: 20px;
+    height: 2px;
+    background: var(--ink);
+    border-radius: 1px;
+  }
+
+  .sidebar-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.3);
+    z-index: 15;
+  }
+
+  @media (max-width: 768px) {
+    .hamburger { display: flex; }
+    .sidebar {
+      position: fixed;
+      top: 0;
+      left: 0;
+      height: 100vh;
+      transform: translateX(-100%);
+      transition: transform .25s ease;
+      z-index: 18;
+      box-shadow: 4px 0 16px rgba(0,0,0,0.15);
+    }
+    body.nav-open .sidebar { transform: translateX(0); }
+    body.nav-open .sidebar-overlay { display: block; }
+  }
+
+  /* ---- Main content ---- */
+  .main {
+    flex: 1;
+    display: flex;
+    justify-content: center;
+    padding: 3rem 1.5rem;
+    min-height: 100vh;
+    background: radial-gradient(ellipse at 50% 20%, var(--cream-deep), var(--cream) 70%);
+  }
+
+  .lookup {
+    width: 100%;
+    max-width: 640px;
+  }
+
+  .lookup h1 {
+    margin: 0 0 .3rem;
+    font-family: 'Baloo 2', sans-serif;
+    font-weight: 700;
+    font-size: clamp(1.6rem, 4vw, 2.2rem);
+    color: var(--ink);
+  }
+
+  .lookup .tagline {
+    margin: 0 0 1.4rem;
+    font-size: .95rem;
+    color: var(--biscuit-shadow);
+  }
+
+  .sport-row {
+    display: flex;
+    gap: .5rem;
+    margin-bottom: 1rem;
+    flex-wrap: wrap;
+  }
+
+  .sport-btn {
+    font-family: 'Baloo 2', sans-serif;
+    font-weight: 500;
+    font-size: .88rem;
+    color: var(--ink);
+    background: #FFFDF7;
+    border: 1px solid var(--cream-deep);
+    border-radius: 20px;
+    padding: .4rem 1rem;
+    cursor: pointer;
+    transition: background .15s ease, color .15s ease;
+  }
+  .sport-btn:hover { background: var(--cream-deep); }
+  .sport-btn.active {
+    background: var(--biscuit);
+    border-color: var(--biscuit);
+    color: #FFFDF7;
+  }
+  .sport-btn:focus-visible {
+    outline: 2px solid var(--biscuit-shadow);
+    outline-offset: 2px;
+  }
+
+  .search-row {
+    display: flex;
+    gap: .6rem;
+    margin-bottom: 1.2rem;
+  }
+
+  .search-row input[type="text"] {
+    flex: 1;
+    font-family: 'Inter', sans-serif;
+    font-size: 1rem;
+    color: var(--ink);
+    background: #FFFDF7;
+    border: 1px solid var(--cream-deep);
+    border-radius: 10px;
+    padding: .65rem .9rem;
+  }
+  .search-row input[type="text"]:focus-visible {
+    outline: 2px solid var(--biscuit-shadow);
+    outline-offset: 1px;
+  }
+
+  .search-row button {
+    font-family: 'Baloo 2', sans-serif;
+    font-weight: 700;
+    font-size: .95rem;
+    color: #FFFDF7;
+    background: var(--biscuit-dark);
+    border: none;
+    border-radius: 10px;
+    padding: 0 1.2rem;
+    cursor: pointer;
+    transition: background .15s ease;
+  }
+  .search-row button:hover { background: var(--biscuit-shadow); }
+
+  .results-list {
+    background: #FFFDF7;
+    border: 1px solid var(--cream-deep);
+    border-radius: 12px;
+    overflow: hidden;
+    margin-bottom: 1.2rem;
+  }
+
+  .result-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
+    padding: .7rem .9rem;
+    background: none;
+    border: none;
+    border-top: 1px solid var(--cream-deep);
+    font-family: 'Inter', sans-serif;
+    font-size: .92rem;
+    color: var(--ink);
+    text-align: left;
+    cursor: pointer;
+  }
+  .result-row:first-child { border-top: none; }
+  .result-row:hover { background: var(--cream); }
+  .result-row .sub {
+    font-size: .8rem;
+    color: var(--biscuit-shadow);
+  }
+
+  .player-card {
+    background: #FFFDF7;
+    border: 1px solid var(--cream-deep);
+    border-radius: 16px;
+    padding: 1.4rem;
+    box-shadow: 0 6px 20px rgba(92, 58, 30, 0.1);
+  }
+
+  .player-head {
+    display: flex;
+    gap: 1rem;
+    align-items: center;
+    margin-bottom: 1rem;
+  }
+
+  .player-head img {
+    width: 64px;
+    height: 64px;
+    border-radius: 50%;
+    object-fit: cover;
+    background: var(--cream-deep);
+    flex-shrink: 0;
+  }
+
+  .player-head h2 {
+    margin: 0;
+    font-family: 'Baloo 2', sans-serif;
+    font-size: 1.2rem;
+    color: var(--ink);
+  }
+
+  .player-head .meta {
+    font-size: .85rem;
+    color: var(--biscuit-shadow);
+    margin-top: .2rem;
+  }
+
+  .stat-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+    gap: .7rem;
+  }
+
+  .stat-box {
+    background: var(--cream);
+    border-radius: 10px;
+    padding: .6rem .5rem;
+    text-align: center;
+  }
+
+  .stat-box .val {
+    font-family: 'Baloo 2', sans-serif;
+    font-size: 1.15rem;
+    color: var(--ink);
+  }
+
+  .stat-box .lbl {
+    font-size: .72rem;
+    color: var(--biscuit-shadow);
+    margin-top: .15rem;
+  }
+
+  .lookup-note {
+    font-size: .85rem;
+    color: var(--biscuit-shadow);
+    margin: 0;
+  }
+</style>
+</head>
+<body>
+
+  <button class="hamburger" id="navToggle" aria-label="Toggle menu" aria-expanded="false" aria-controls="siteNav">
+    <span></span><span></span><span></span>
+  </button>
+  <div class="sidebar-overlay" id="navOverlay"></div>
+
+  <nav class="sidebar" id="siteNav">
+    <a class="brand" href="index.html">Fantasy Biscuit</a>
+    <ul class="nav-links">
+      <li><a href="index.html">Home</a></li>
+      <li><a href="players.html" aria-current="page">Players</a></li>
+      <li><a href="about.html">About Us</a></li>
+    </ul>
+  </nav>
+
+  <main class="main">
+    <div class="lookup">
+      <h1>Player Lookup</h1>
+      <p class="tagline">Search a player across MLB, NFL, NBA, or NHL.</p>
+
+      <div class="sport-row" id="sportToggle" role="group" aria-label="Choose league">
+        <button type="button" class="sport-btn active" data-sport="mlb">MLB</button>
+        <button type="button" class="sport-btn" data-sport="nfl">NFL</button>
+        <button type="button" class="sport-btn" data-sport="nba">NBA</button>
+        <button type="button" class="sport-btn" data-sport="nhl">NHL</button>
+      </div>
+
+      <form class="search-row" id="searchForm">
+        <input type="text" id="playerQuery" placeholder="Player name, e.g. Aaron Judge" autocomplete="off">
+        <button type="submit">Search</button>
+      </form>
+
+      <div id="resultsArea"></div>
+      <div id="playerArea"></div>
+    </div>
+  </main>
+
+  <script>
+    const SPORTS = {
+      mlb: { path: 'baseball', league: 'mlb', label: 'MLB' },
+      nfl: { path: 'football', league: 'nfl', label: 'NFL' },
+      nba: { path: 'basketball', league: 'nba', label: 'NBA' },
+      nhl: { path: 'hockey', league: 'nhl', label: 'NHL' }
+    };
+
+    const sportButtons = document.querySelectorAll('.sport-btn');
+    const form = document.getElementById('searchForm');
+    const queryInput = document.getElementById('playerQuery');
+    const resultsArea = document.getElementById('resultsArea');
+    const playerArea = document.getElementById('playerArea');
+
+    let currentSport = 'mlb';
+
+    sportButtons.forEach(btn => {
+      btn.addEventListener('click', () => {
+        currentSport = btn.dataset.sport;
+        sportButtons.forEach(b => b.classList.toggle('active', b === btn));
+        resultsArea.innerHTML = '';
+        playerArea.innerHTML = '';
+      });
+    });
+
+    function showNote(container, text) {
+      container.innerHTML = `<p class="lookup-note">${text}</p>`;
+    }
+
+    async function searchPlayers(query) {
+      const { path, league } = SPORTS[currentSport];
+      showNote(resultsArea, 'Searching…');
+      playerArea.innerHTML = '';
+
+      try {
+        const res = await fetch(
+          `https://site.web.api.espn.com/apis/search/v2?query=${encodeURIComponent(query)}&limit=25`
+        );
+        if (!res.ok) throw new Error('Search failed');
+        const data = await res.json();
+
+        const groups = data.results || [];
+        let matches = [];
+        groups.forEach(group => {
+          (group.contents || []).forEach(item => {
+            const itemType = (item.type || '').toLowerCase();
+            const itemSport = (item.sport || '').toLowerCase();
+            const itemLeague = (item.league || '').toLowerCase();
+            const isPlayer = itemType === 'player' || itemType === 'athlete';
+            const matchesLeague = itemLeague === league || (!itemLeague && itemSport === path);
+            if (isPlayer && matchesLeague) matches.push(item);
+          });
+        });
+
+        if (matches.length === 0) {
+          showNote(resultsArea, `No ${SPORTS[currentSport].label} players found for "${query}".`);
+          return;
+        }
+
+        resultsArea.innerHTML = '';
+        const list = document.createElement('div');
+        list.className = 'results-list';
+        matches.slice(0, 8).forEach(item => {
+          const row = document.createElement('button');
+          row.type = 'button';
+          row.className = 'result-row';
+          const teamName = item.team && item.team.name ? item.team.name : '';
+          row.innerHTML = `<span>${item.displayName || item.name || 'Unknown player'}</span>
+            <span class="sub">${teamName}</span>`;
+          row.addEventListener('click', () => loadPlayer(item.id));
+          list.appendChild(row);
+        });
+        resultsArea.appendChild(list);
+
+        if (matches.length === 1) {
+          loadPlayer(matches[0].id);
+        }
+      } catch (err) {
+        showNote(resultsArea, 'Couldn\'t search right now — try again in a bit.');
+      }
+    }
+
+    function statRowsFrom(data) {
+      const rows = [];
+      const stats = data.statistics;
+      if (!stats) return rows;
+      const categories = (stats.splits && stats.splits.categories) || stats.categories || [];
+      categories.forEach(cat => {
+        (cat.stats || []).forEach(s => {
+          const label = s.shortDisplayName || s.displayName || s.label || s.name;
+          const value = s.displayValue !== undefined ? s.displayValue : s.value;
+          if (label !== undefined && value !== undefined && value !== null && value !== '') {
+            rows.push({ label, value });
+          }
+        });
+      });
+      return rows;
+    }
+
+    async function loadPlayer(id) {
+      const { path, league, label } = SPORTS[currentSport];
+      showNote(playerArea, 'Loading player…');
+
+      try {
+        const res = await fetch(
+          `https://site.web.api.espn.com/apis/common/v3/sports/${path}/${league}/athletes/${id}/overview`
+        );
+        if (!res.ok) throw new Error('Player fetch failed');
+        const data = await res.json();
+
+        const athlete = data.athlete || {};
+        const name = athlete.displayName || athlete.fullName || 'Unknown player';
+        const team = athlete.team && athlete.team.displayName ? athlete.team.displayName : '';
+        const position = athlete.position && athlete.position.displayName ? athlete.position.displayName : '';
+        const jersey = athlete.jersey ? `#${athlete.jersey}` : '';
+        const headshot = athlete.headshot && athlete.headshot.href ? athlete.headshot.href : '';
+
+        const metaParts = [label, position, team, jersey].filter(Boolean);
+        const statRows = statRowsFrom(data).slice(0, 12);
+
+        const statHTML = statRows.length
+          ? `<div class="stat-grid">${statRows.map(r => `
+              <div class="stat-box">
+                <div class="val">${r.value}</div>
+                <div class="lbl">${r.label}</div>
+              </div>`).join('')}</div>`
+          : `<p class="lookup-note">Detailed stats aren't available for this player right now.</p>`;
+
+        playerArea.innerHTML = `
+          <div class="player-card">
+            <div class="player-head">
+              ${headshot ? `<img src="${headshot}" alt="${name}">` : ''}
+              <div>
+                <h2>${name}</h2>
+                <div class="meta">${metaParts.join(' · ')}</div>
+              </div>
+            </div>
+            ${statHTML}
+          </div>`;
+      } catch (err) {
+        showNote(playerArea, 'Couldn\'t load that player\'s stats right now — try again in a bit.');
+      }
+    }
+
+    form.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const q = queryInput.value.trim();
+      if (q) searchPlayers(q);
+    });
+
+    const navToggle = document.getElementById('navToggle');
+    const navOverlay = document.getElementById('navOverlay');
+    function closeNav() {
+      document.body.classList.remove('nav-open');
+      navToggle.setAttribute('aria-expanded', 'false');
+    }
+    navToggle.addEventListener('click', () => {
+      const isOpen = document.body.classList.toggle('nav-open');
+      navToggle.setAttribute('aria-expanded', String(isOpen));
+    });
+    navOverlay.addEventListener('click', closeNav);
+  </script>
+
+</body>
+</html>
