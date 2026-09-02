@@ -440,13 +440,15 @@
           const teamName = item.team && item.team.name ? item.team.name : '';
           row.innerHTML = `<span>${item.displayName || item.name || 'Unknown player'}</span>
             <span class="sub">${teamName}</span>`;
-          row.addEventListener('click', () => loadPlayer(item.id));
+          row.addEventListener('click', () => loadPlayer(item.id, teamName));
           list.appendChild(row);
         });
         resultsArea.appendChild(list);
 
         if (matches.length === 1) {
-          loadPlayer(matches[0].id);
+          const only = matches[0];
+          const onlyTeam = only.team && only.team.name ? only.team.name : '';
+          loadPlayer(only.id, onlyTeam);
         }
       } catch (err) {
         showNote(resultsArea, `Search didn't go through (${err.message}). Try again in a bit.`);
@@ -470,23 +472,32 @@
       return rows;
     }
 
-    // site.api.espn.com blocks requests from Cloudflare's network (403), but
-    // site.web.api.espn.com — the same domain search already uses — doesn't.
-    // Its /overview endpoint conveniently includes both bio and season stats
-    // in one response, so we only need this one call.
+    // Every "site" and "web" API athlete-detail route we tried gets a 403
+    // (ESPN appears to specifically guard detailed athlete data, even though
+    // search stays open). This is ESPN's separate "Core API" — different
+    // infrastructure, worth trying. Its athlete object uses raw numeric
+    // height/weight rather than pre-formatted display strings, and its
+    // "team" field is just a reference link rather than a name, so we fall
+    // back to the team name the search step already gave us.
+    function formatHeight(totalInches) {
+      if (!totalInches) return '';
+      const feet = Math.floor(totalInches / 12);
+      const inches = Math.round(totalInches % 12);
+      return `${feet}' ${inches}"`;
+    }
+
     async function fetchPlayerOverview(path, league, id) {
-      const url = `https://site.web.api.espn.com/apis/common/v3/sports/${path}/${league}/athletes/${id}/overview?region=us&lang=en`;
+      const url = `https://sports.core.api.espn.com/v2/sports/${path}/leagues/${league}/athletes/${id}`;
       const res = await fetch(viaProxy(url));
       if (!res.ok) throw new Error(`Player details request failed (HTTP ${res.status})`);
-      const data = await res.json();
-      const athlete = data.athlete || {};
+      const athlete = await res.json();
       if (!athlete || (!athlete.displayName && !athlete.fullName)) {
         throw new Error('Player details came back empty');
       }
-      return { athlete, statRows: statRowsFrom(data).slice(0, 8) };
+      return { athlete, statRows: [] };
     }
 
-    async function loadPlayer(id) {
+    async function loadPlayer(id, fallbackTeam) {
       const { path, league, label } = SPORTS[currentSport];
       showNote(playerArea, 'Loading player…');
 
@@ -494,17 +505,22 @@
         const { athlete, statRows } = await fetchPlayerOverview(path, league, id);
 
         const name = athlete.displayName || athlete.fullName || 'Unknown player';
-        const team = athlete.team && athlete.team.displayName ? athlete.team.displayName : '';
+        const team = (athlete.team && athlete.team.displayName)
+          ? athlete.team.displayName
+          : (fallbackTeam || '');
         const position = athlete.position && athlete.position.displayName ? athlete.position.displayName : '';
         const jersey = athlete.jersey ? `#${athlete.jersey}` : '';
         const headshot = athlete.headshot && athlete.headshot.href ? athlete.headshot.href : '';
+
+        const heightVal = athlete.displayHeight || formatHeight(athlete.height);
+        const weightVal = athlete.displayWeight || (athlete.weight ? `${athlete.weight} lbs` : '');
 
         const metaParts = [label, position, jersey].filter(Boolean);
 
         const bioBoxes = [
           { lbl: 'Age', val: athlete.age },
-          { lbl: 'Height', val: athlete.displayHeight },
-          { lbl: 'Weight', val: athlete.displayWeight },
+          { lbl: 'Height', val: heightVal },
+          { lbl: 'Weight', val: weightVal },
           { lbl: 'Team', val: team }
         ].filter(b => b.val !== undefined && b.val !== null && b.val !== '');
 
